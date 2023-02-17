@@ -1,0 +1,201 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+var app = require('../app');
+var debug = require('debug')('backend:server');
+var http = require('http');
+var users = require('../models/users');
+const pool = require("../db");
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '9000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+
+const { Server } = require("socket.io");
+const io = new Server(server, {
+  cors: {
+    origin: 'http://192.168.0.9:3000',
+    methods: ["GET", "POST"]
+  }
+});
+
+
+io.on('connection', (socket) => {
+  //Examples
+  socket.on('chat message', (msg) => {
+    io.emit('chat message', msg);
+  });
+});
+
+io.on('connection', (socket) => {
+  console.log('client connected: ', socket.id)
+
+  socket.on('disconnect', (reason) => {
+    console.log(reason)
+  })
+
+  socket.on('ping', () => {
+    io.emit('pong');
+  });
+
+  socket.on('pingBroadcast', () => {
+    socket.broadcast.emit('pongBroadcast'); //send to everyone less to the emitter
+  });
+
+  socket.on("word", (arg, callback) => {
+    console.log(arg); // "wordEnviado"
+    callback("got it");
+  });
+
+  socket.on("getData", (callback) => {
+    pool.query("SELECT * FROM usuarios ORDER BY id ASC", (err, res) => {
+      if (err) throw err
+      callback(res.rows);
+    })
+
+  });
+
+
+
+  //------------------ [ CRUD ] --------------------//
+
+  //GET
+  socket.on("getUsers", (callback) => {
+    users.getAllU((newData) => {
+      callback(newData); //rows
+
+    });
+  });
+
+  socket.on("getUser", (id, callback) => {
+    users.getU(id, (newData) => {
+      callback(newData); //row
+    });
+  });
+
+  //POST
+  socket.on("addIdUser", (data, callback) => {
+    users.addIdU(data, (newData) => {
+      callback(newData); //ok
+    });
+  });
+  socket.on("addIdUser2", (data, callback) => {
+    users.addIdU2(data, (newData) => {
+      callback(newData); //ok
+    });
+  });
+
+  socket.on("addUser", (data, callback) => {
+    users.addU(data, (newData) => {
+      callback(newData); //ok
+    });
+  });
+
+
+  //PUT
+  socket.on("putUser", (id, data, callback) => {
+    users.editU(id, data, (newData) => {
+      callback(newData); //ok
+    });
+  });
+
+  //DELETE
+  socket.on("deleteUser", (id, callback) => {
+    users.deleteU(id, (newData) => {
+      callback(newData); //ok
+    });
+  });
+
+
+  //sending test
+  socket.on("getUsersEnviado", () => {
+    users.getAllUEN((newData) => {
+      //callback(n); //rows
+      //console.log(newData)
+      //socket.emit("getUsersEnvi", n);  // socket send to the one who sent 
+      io.emit("getUsersEnvi", newData);  // io send to everyone
+    });
+  });
+
+})
+
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+server.listen(port);
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
